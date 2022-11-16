@@ -1,0 +1,1218 @@
+-------------------------------
+Ubuntu Server 20.04 LTS（64bit)
+ROS2 Foxy
+python 3.8.10
+OpenCV 4.6.0
+-------------------------------
+
+■OS
+・Ubuntu Server 20.04 LTS（64bit）を選択
+　→ROS2の場合は64bitが必要
+　　raspberry pi 8GBの場合もRAMをフルに使うには64bitが良い
+
+■初回起動
+・HDMIケーブルを接続した状態でないと画面が表示されない
+・sudo apt-get updateはできるが、upgradeできない
+　→再起動すればできた
+・IPアドレス確認
+　sudo apt-get install net-tools
+　ifconfig
+
+■Ubuntu desktopのインストール
+  https://agirobots.com/raspberry-pi-ubuntu-desktop-20-04-lts/
+　sudo apt install ubuntu-desktop
+
+■Wifi 固定IP設定
+https://linuxfan.info/ubuntu-2004-desktop-static-ip-address
+アドレス
+192.168.11.xx
+ネットマスク
+255.255.255.0
+ゲートウェイ
+192.168.11.1
+DNS ←Autoを解除して手動に変更
+192.168.11.1
+
+■VNC接続※22.04はWindowsのリモートデスクトップ接続が使える
+https://mixcubenet.com/ubuntu/remotely_connect_to_ubuntu_screen_using_vnc_from_windows_and_share_screen/
+
+raspberry piのsettingでsharingをON(Wifi接続が必要)
+
+Terminal上で
+　gsettings set org.gnome.Vino require-encryption false
+　→22.04の場合は不要？
+
+[22.04]
+接続時にProtocol error: bad rectangle sizeが出る問題（VNC Viewerの設定でQualityをAuto→Mediumに変更）
+https://qiita.com/cielavenir/items/60d694f528d555deb20c
+
+リモート接続の度にログインパスワードが変更される問題
+http://slapper.sblo.jp/article/189603656.html
+
+■ディスプレイなしでVNC接続
+https://qiita.com/y-tsutsu/items/b50d44bd70c25279d130
+
+sudo apt install xserver-xorg-video-dummy
+
+sudo nano /usr/share/X11/xorg.conf.d/80-dummy.conf
+※中身は別ファイル（80-dummy.conf）参照
+
+Modelineの設定はcvtコマンドで確認
+$ cvt 1920 1080
+# 1920x1080 59.96 Hz (CVT 2.07M9) hsync: 67.16 kHz; pclk: 173.00 MHz
+Modeline "1920x1080_60.00"  173.00  1920 2048 2248 2576  1080 1083 1088 1120 -hsync +vsync
+
+■[22.04]スリープモードの停止
+https://en-wiki.ikoula.com/en/Disable_Ubuntu_sleep_mode
+
+systemctl status sleep.target
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+systemctl status sleep.target
+
+■トラブルシューティング
+・sudo apt upgrade時に下記エラーが出た場合の対応
+「Could not get lock /var/lib/dpkg/lock-frontend. It is held by process xxx」
+https://mebee.info/2021/05/26/post-34983/
+sudo kill -9 xxx
+※lockファイルを削除するのは止めた方が良い？
+
+・ログイン直後にSystem Program Problem Detected
+https://www.chihayafuru.jp/tech/index.php/archives/1716
+キャッシュに残ったクラッシュログを削除すればOK↓
+sudo rm /var/crash/*
+
+・wifiをオフにしてVNCで接続できなくなった場合
+有線を接続して、IPアドレスを確認（Buffaloのwifiルータの管理画面等で接続情報を確認すれば分かる（有線と書いてあるもの））
+Teratermで接続する（VNCの場合は拒絶されることがある）
+
+nmcli radio wifi
+　→これがdisabledだとwifiが起動していない
+
+sudo nmcli radio wifi on
+　→これでenabledになればwifiが接続される（sudoで実行しないと有効にならない）
+
+
+■Power Managementを切る→絶対ダメ！！
+※GUIでもCUIでもOFFにしたらOSが起動しなくなった（謎）
+https://qiita.com/ivvakanni/items/0b956b08a63da15973bc
+
+■Samba
+[22.04]
+エクスプローラーを開いて~/Publicフォルダを右クリック
+Propertiesを選択し、Local Network Shareタブへ移動
+三箇所のチェックボックスにチェックをつける
+
+以下のコマンドを実行（実行しないとWindowsからフォルダにアクセスできない）
+sudo pdbedit -a ubuntu
+
+Windowsを再起動して、エクスプローラーで\\192.168.11.90にアクセス
+
+---
+
+http://greensignal.jp/blog/?p=2518
+sudo apt install samba
+sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
+sudo nano /etc/samba/smb.conf
+
+[share]
+path = /home/ubuntu/share
+writable = yes
+guest ok = yes
+guest only = yes
+create mode = 0777
+directory mode = 0777
+
+sudo systemctl restart smbd nmbd
+sudo service smbd status
+
+sudo systemctl enable smbd nmbd
+
+homeで
+mkdir share
+sudo chmod 777 share
+
+Windowsから
+　\\192.168.11.90\share
+でアクセス
+
+
+■スワップ領域の確保
+https://www.digitalocean.com/community/tutorials/how-to-add-swap-space-on-ubuntu-20-04-ja
+
+sudo swapon --show
+free -h
+df -h
+sudo fallocate -l 10G /swapfile
+ls -lh /swapfile
+sudo chmod 600 /swapfile
+ls -lh /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+sudo swapon --show
+free -h
+sudo cp /etc/fstab /etc/fstab.bak
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+■wifi linuxドライバ
+・WI-U3-1200AX2
+https://zenn.dev/kenhys/articles/20220220-buffalo-wi-u3-1200ax2
+↑チップセットがRTL8852AUであることが分かるが、上のリンクで紹介されているドライバでは動かなかった。。。
+
+↓ここで紹介されてるドライバを使って動いた
+How to Install Realtek Wifi Drivers in Ubuntu 22.04 | Linux Mint 21/20
+https://fostips.com/realtek-wifi-drivers-ubuntu-linux-mint/
+
+・Archer T3U PLUS AC1300
+https://tech.nosuz.jp/post/2021-09/ubuntu_wifi/#rtl8812bu-and-rtl8822bu
+https://github.com/morrownr/88x2bu-20210702
+
+■時刻同期
+https://qiita.com/strv/items/4859ec1cdb6b4b784acc
+
+sudo apt install chrony
+/etc/chrony/chrony.conf
+systemctl restart chrony
+chronyc sources
+
+■Dockerインストール
+https://qiita.com/yuyakato/items/ff7b23f9cee42c937ba9
+
+sudo apt install --yes docker.io
+※↑ARM64環境なら上記コマンドで一発
+
+sudo docker container run --tty --rm hello-world #←実行テスト
+
+docker psや、docker runコマンドを実行したら「docker got permission denied～」というエラーが出た。
+以下のようにパーミッションを設定したら解決した↓
+
+https://tech.librastudio.co.jp/entry/index.php/2018/07/14/post-1924/
+sudo gpasswd -a $(whoami) docker
+sudo chgrp docker /var/run/docker.sock
+sudo service docker restart
+
+上記だけでは足りず、、、
+https://qiita.com/berukokoko/items/57cdcb668cf4e2bed292
+cd /var/run
+sudo chown ubuntu:ubuntu docker.sock
+
+または
+
+sudo chmod 666 /var/run/docker.sock
+
+
+■ROS2 Foxy
+https://rt-net.jp/mobility/archives/15692
+https://demura.net/education/lecture/20536.html
+https://github.com/nishibra/r2cv-ros2
+
+
+sudo apt update && sudo apt install curl gnupg2 lsb-release
+curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+
+sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+
+sudo apt update
+sudo apt install ros-foxy-desktop
+
+source /opt/ros/foxy/setup.bash
+echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+
+sudo apt install -y python3-colcon-common-extensions # ビルドシステムcolconを別途インストール
+sudo apt install -y python3-argcomplete  python3-pip
+
+sudo apt install -y python3-rosdep
+sudo rosdep init
+rosdep update
+
+mkdir -p ros2_ws/src
+cd ros2_ws
+colcon build --packages-select xxx
+colcon build --packages-skip-build-finished　←二回目以降更新してもビルドされなくなる
+※colconビルドで便利なオプション↓
+https://qiita.com/seshimaru/items/ed344530ead80ab1733f
+
+source ~/ros2_ws/install/setup.bash
+
+ros2 run demo_nodes_cpp talker
+ros2 run demo_nodes_py listener
+
+・パッケージの作成
+ros2 pkg create --build-type ament_python --node-name twist_subscriber_node twist_subscriber
+
+■DDS
+https://github.com/ros2/rmw_cyclonedds
+ros2 doctor --report
+sudo apt install ros-humble-rmw-cyclonedds-cpp
+gedit ~/.bashrc　で以下を記述
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+#export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+source ~/.bashrc
+ros2 doctor --report
+
+■Humble
+ビルド時のワーニング
+/usr/lib/python3/dist-packages/setuptools/dist.py:723: UserWarning: Usage of dash-separated 'script-dir' will not be supported in future versions. Please use the underscore name 'script_dir' instead
+  warnings.warn(
+
+https://github.com/xmlsec/python-xmlsec/issues/182
+setup.cfgで
+　script-dir →　script_dir
+　install-scripts → install_scripts
+
+https://answers.ros.org/question/386341/ros2-userwarning-usage-of-dash-separated-install-scripts-will-not-be-supported-in-future-versions-please-use-the-underscore-name-install_scripts/
+sudo apt install python3-pip
+pip install setuptools==58.2.0　←setuptoolsのバージョンがこれより新しいとワーニングが出る
+
+■パッケージ
+humble
+
+sudo apt install -y python3-colcon-common-extensions python3-argcomplete  python3-pip
+sudo apt install -y python3-rosdep ※python3-rosdep2は古いので注意
+sudo apt-get -y install xterm ros-humble-rmw-cyclonedds-cpp ros-humble-robot-localization ros-humble-imu-tools ros-humble-image-transport ros-humble-image-transport-plugins
+sudo apt-get -y install ros-humble-navigation2 ros-humble-nav2-bringup ros-humble-turtlebot3* ros-humble-joint-state-publisher-gui ros-humble-xacro
+
+■ROS2でノートPCとRaspberry Piを連携
+https://rt-net.github.io/tutorials/raspimouse/ros/samples.html
+
+export ROS_DOMAIN_ID=22
+を設定すればOK
+
+Raspberry Pi Pico（micro-ros）も別途設定する必要がある
+foxy
+ https://answers.ros.org/question/366609/ros_domain_id-with-microros/
+humble
+ https://github.com/micro-ROS/micro-ROS-demos/blob/300067eaa082b7a85e4f2e648f8bee1623b4b08f/rclc/configuration_example/configured_publisher/main.c#L49
+
+
+
+■ROS2ライブラリ
+・ラズパイ上のROS2で圧縮した画像をPublishする
+https://qiita.com/sugimaro/items/85938bde53ebb92db22f
+
+sudo apt install ros-foxy-image-transport
+sudo apt install ros-foxy-image-transport-plugins
+
+ros2 run image_transport republish raw compressed --ros-args --remap in:=/image_raw --remap out/compressed:=/image_raw/compressed
+
+■WebRTC Momo
+https://shuzo-kino.hateblo.jp/entry/2021/10/08/235753
+
+https://nekokohouse.sakura.ne.jp/raspi/#rasp_aarch64_encode
+ubuntu や raspberry pi os には h264 をハードウェアエンコードできる ffmpeg がパッケージで用意されている（h264_omx オプション）。
+しかし、64bit OS 環境ではライブラリが足りず、使用できない。 
+(もしかすると、armコアは 64bit アーキテクチャだが videoコアは 32bit アーキテクチャなせいかもしれない)
+
+
+
+
+■DepthAI
+https://docs.luxonis.com/projects/api/en/latest/install/#ubuntu
+
+
+http://wisteriahill.sakura.ne.jp/CMS/WordPress/2022/01/16/edge-ai-camera-face_recognition/
+
+git clone https://github.com/luxonis/depthai.git
+cd depthai
+python3 install_requirements.py
+
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="03e7", MODE="0666"' | sudo tee /etc/udev/rules.d/80-movidius.rules
+
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+python3 depthai_demo.py
+
+・バージョン確認
+python3 -c "import depthai as d; print(d.__version__)"
+
+---
+https://github.com/luxonis/depthai-experiments/tree/master/gen2-yolo
+
+pip3 install imutils
+git clone https://github.com/luxonis/depthai-experiments.git
+
+cd depthai-experiments/gen2-yolo/device-decoding
+
+python3 -m pip install -r requirements.txt
+
+python3 main.py -m yolov4_tiny_coco_416x416 -c json/yolov4-tiny.json
+
+※学習済モデル「yolov4_tiny_coco_416x416」は以下に登録されている
+https://zoo.luxonis.com/
+
+
+
+・MJPEG
+https://discuss.luxonis.com/d/753-encoded-video-stream-to-ros-msg/2
+https://github.com/luxonis/depthai-experiments/blob/master/gen2-play-encoded-stream/mjpeg.py
+
+
+
+
+---
+https://docs.luxonis.com/projects/api/en/latest/samples/Yolo/tiny_yolo/#
+
+git clone https://github.com/luxonis/depthai-python.git
+cd depthai-python/examples
+python3 install_requirements.py
+
+cd Yolo
+python3 tiny_yolo.py yolo4
+
+■DepthAI ROS
+https://robofoundry.medium.com/oak-d-lite-camera-ros2-setup-1e74ed03350d
+
+sudo wget -qO- https://raw.githubusercontent.com/luxonis/depthai-ros/main/install_dependencies.sh | sudo bash
+※↑必ずhomeディレクトリで行うこと（これでdepthai-coreがインストールされる）
+
+sudo apt install libopencv-dev
+
+---
+※ROS2インストール時にrosdepを入れていない場合に実行
+sudo apt install python3-rosdep
+sudo rosdep init
+rosdep update
+---
+
+sudo apt install python3-vcstool
+
+cd ros2_ws
+wget https://raw.githubusercontent.com/luxonis/depthai-ros/main/underlay.repos
+vcs import src < underlay.repos
+rosdep install --from-paths src --ignore-src -r -y
+source /opt/ros/foxy/setup.bash
+colcon build
+source install/setup.bash #←忘れずにすること！
+
+ビルトについて
+※スワップ領域を確保していないとフリーズする
+　スワップ領域を確保していれば、時間をかけて最後までビルドできた（途中で止まるような現象はあった）
+
+※ここでは関係なかったが、参考情報↓
+https://qiita.com/tamusou1/items/ef6035f3f6e098c8bb98
+ROS2のビルドは、デフォルトでは4並列で行うようになっており、低スペックPCやラズパイだとうまく行かないことがある
+解決策：colcon buildの実行オプションで並列実行数を1にする
+colcon build --parallel-workers 1
+
+・ros_tcp_endpoint
+ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=192.168.11.xx
+
+・mobilenet
+ros2 launch depthai_examples mobile_publisher.launch.py camera_model:=OAK-D-LITE
+
+・yolov4
+ros2 launch depthai_examples yolov4_publisher.launch.py camera_model:=OAK-D-LITE
+
+・画像の可視化
+ros2 run rqt_image_view rqt_image_view
+
+・検出結果の可視化
+https://github.com/ros2/detection_visualizer
+
+ros2 run detection_visualizer detection_visualizer
+ --ros-args -r ~/images:=/color/image -r ~/detections:=/color/mobilenet_detections
+↑コマンドライン引数は何か間違ってて上手くいかなかった。。。直接pythonスクリプトを変更して対応した
+
+デフォルトでは
+　label = '{} {:.3f}'.format(max_class, max_score)
+で、max_class = hypothesis.id（int64）となっているため、ラベル名が表示されない。
+以下のラベル名と対応付ければ出力できる↓
+https://github.com/luxonis/depthai-python/blob/main/examples/MobileNet/rgb_mobilenet.py
+labelMap = ["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
+            "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+
+・ROS2 teleop_twist_keyboard
+https://github.com/ros2/teleop_twist_keyboard/blob/dashing/teleop_twist_keyboard.py
+
+・ROS2 teleop_twist_joy
+https://github.com/ros2/teleop_twist_joy/blob/foxy/src/teleop_twist_joy.cpp
+
+・tfの確認（view_framesの拡張子(.py)がないと"No executable found"とエラーになる）
+ros2 run tf2_tools view_frames.py
+
+■ROSのワークスペースを簡単に切り替えるTips
+https://techmagic.co.jp/blog211207/
+
+※ROS2用に一部修正↓
+function change_ws() {
+  CUR=$PWD
+  while [ $CUR != $HOME ]; do
+    if [ -f"$CUR"/install/setup.bash ]; then
+      export COLCON_WORKSPACE=$CUR
+      export USER_PACKAGE_PATH=$COLCON_WORKSPACE/install
+      source $USER_PACKAGE_PATH/setup.bash
+      echo "ROS2 workspace: $CUR"
+      break
+    fi
+  CUR=`readlink -f $CUR/..`
+  done
+}
+
+■launchファイルの記述方法
+〇Python
+・ROS2の勉強　第8弾：環境の地図作成
+https://qiita.com/Yuya-Shimizu/items/f1bc06cf2881d02bfc01
+
+・【ROS2】python形式のlaunchでremapとparameterを記述する方法
+https://qiita.com/RenFukatsu/items/a1e08ea3db2a82a53f12
+
+・launchファイルでlaunchを呼び出す（ROS2）
+https://ar-ray.hatenablog.com/entry/2021/08/15/203449
+
+〇C++
+・ROS2のCMakeを簡単に！~ament_cmake_auto~
+https://hans-robo.hatenablog.com/entry/2020/12/15/153503
+
+
+■SLAM
+・slam-toolbox
+sudo apt install ros-foxy-slam-toolbox
+
+launchファイルは以下
+/opt/ros/foxy/share/slam_toolbox/launch
+
+設定値ファイルは以下
+/opt/ros/foxy/share/slam_toolbox/config
+
+Cartographrer パラメータ設定　はじめの一歩
+https://qiita.com/devemin/items/812871040d0554284101
+※古いバージョンのcartographrer_rosだとuse_pose_extrapolatorのパラメータがなくてエラーになるので注意
+
+ROS2 cartographerで地図保存する方法
+https://www.cnblogs.com/lvchaoshun/p/14315447.html
+ v   
+ros2 launch 
+ros2 service call /finish_trajectory cartographer_ros_msgs/srv/FinishTrajectory "{trajectory_id: '0'}"
+ros2 service call /write_state cartographer_ros_msgs/srv/WriteState "{filename: '/home/yu/mymap.pbstream'}"
+
+cd /opt/ros/humble/lib/cartographer_ros
+./cartographer_pbstream_to_ros_map -map_filestem=${HOME}/bags/mymap -pbstream_filename=${HOME}/bags/mymap.pbstream -resolution=0.05
+　→mapトピックが生成される
+　ros2 run cartographer_ros cartographer_pbstream_to_ros_map -map_filestem=${HOME}/bags/mymap -pbstream_filename=${HOME}/bags/mymap.pbstream -resolution=0.05
+　でも実行できる？
+
+ros2 run nav2_map_server map_saver_cli -f my_map --ros-args -p save_map_timeout:=10000
+
+・Navigation 2 with Cartogtographer
+https://github.com/mlherd/navigation2/blob/77e84b7fd0236758bf1a2a243082b325b3025aad/doc/use_cases/navigation_with_cartographer.md
+
+
+Exploiting the map generated by Cartographer ROS
+https://google-cartographer-ros.readthedocs.io/en/latest/assets_writer.html
+
+https://blog.csdn.net/weixin_29940495/article/details/115062409
+
+https://qiita.com/devemin/items/1723058cf3bac85aaa0b
+
+■参考リンク（全般）
+・ラズパイマウスサンプルプログラム
+https://github.com/rt-net/RaspberryPiMouse/tree/master/SampleProgram
+https://github.com/rt-net/raspimouse2
+https://github.com/rt-net/raspimouse_ros2_examples
+
+・RCタンク
+https://www.hiramine.com/physicalcomputing/rctank_raspi3_wifi/index.html
+
+・Unity-ROS
+https://github.com/unity3d-jp/Unity-ROS-MobileRobot-UI-Tutorial
+
+・Raspberry Piロボットカー作成（遠隔操作・SLAM・Unity同期）
+https://protopedia.net/prototype/3058
+
+・Mini Pupper
+https://atmarkit.itmedia.co.jp/ait/subtop/features/di/playwithaimlds_index.html
+
+・作って分かった「ROSを使う前のロボットと、ROSを使った後のロボットの変化」
+https://qiita.com/motoms/items/1e1b6866eba52dcdf90b
+
+・ROS2 リアルタイムの最新動向の紹介と、ROS2 への期待
+https://swest.toppers.jp/SWEST22/program/pdfs/s3b_public.pdf
+
+・ダンシングライダー
+https://github.com/shaga/DancingRiderRosCtrl
+
+
+■モーター
+★ROSによるロボットカートの制御
+https://hajimerobot.co.jp/ros/robotcart/
+
+・モーターの種類
+https://deviceplus.jp/mc-general/motor-type/
+https://www.jel-robot.co.jp/term/term003.html
+
+・モーター制御
+Arduinoで学ぶ基礎からのモーター制御
+https://monoist.itmedia.co.jp/mn/series/2914/
+
+・タミヤカムロボ
+https://botalab.tech/ros_raspi_tamiya_cam_robot_motor/
+https://github.com/botamochi6277/tamiya_cam_robot
+
+https://taku-info.com/ros2ctl_pwmservo/
+
+・Raspi+ROSでモータを回してみた
+https://qiita.com/MENDY/items/0089b0f52acf23b7d3f1
+
+・RaspberryPiとROSでサーボモータを動かす
+https://botalab.tech/drive-rc-servo-with-raspberrypi-and-ros/
+
+・ラズパイからDCモーターを制御するプログラム
+https://www.souichi.club/raspberrypi/dc-motor/
+
+・【ラズパイ】モータドライバTA8428Kでモータ制御
+https://101010.fun/iot/motor-driver-ta8428k.html
+
+・Pololu Romi ロボットカーをROSで動かしてみました
+https://kanpapa.com/today/2022/01/pololu-romi-ros-romipi1.html
+
+・Romi改造
+https://www.kbrtny.com/?tag=romi
+
+・移動ロボットのモータ制御と走行制御
+https://at-wat.github.io/ROS-quick-start-up/files/Vehicle_and_Motion_Control.pdf
+
+・購入したモータスペック（GA12-N20）
+https://robokits.co.in/motors/n20-metal-gear-micro-motors/n20-metal-gear-encoder-motor/ga12-n20-6v-60-rpm-all-metal-gear-micro-dc-encoder-motor-with-precious-metal-brush
+https://ja.aliexpress.com/item/32615361964.html?gatewayAdapt=glo2jpn
+https://oldmakers.blog.jp/archives/10261566.html
+
+DC6V
+60rmp
+減速比250: 1
+
+Encoder Type: Quad
+PPR: 7
+CPR: 7 x 4 = 28
+CPR at output shaft: 7000
+
+1回転あたり210パルス = モーターテールホールエンコーダ (7cpr) * 30 (減速比）←計算変わる？
+
+・RADU: Motor Controller Software for Arduino and Raspberry Pico
+https://admantium.medium.com/radu-motor-controller-software-for-arduino-and-raspberry-pico-bf7c465e8a45
+
+■エンコーダー
+・エンコーダー
+https://yukmal.com/2018/05/12/1-3/
+https://www.youtube.com/watch?v=k9n5Q-GdflE
+https://proftakaya.exblog.jp/24828150/
+https://www.robotshop.com/jp/ja/encoder-pair-tamiya-twin-motor-gearbox.html #←組み立て方の動画あり
+
+・格安エンコーダをRaspberry Piで使う
+https://www.oki-lab.net/entry/post-531
+
+・タミヤ製ギヤードモーターにエンコーダを取り付ける方法
+https://s-omosiro.com/2018/05/08/encoda/
+
+・エンコーダの値を読み取れるようにする
+https://github.com/pootle/pimotors/blob/master/quadencoder.py
+https://abyz.me.uk/rpi/pigpio/python.html#callback
+https://github.com/GitJer/Some_RPI-Pico_stuff/tree/main/Rotary_encoder
+
+
+
+割り込みを使ってエンコーダ値をカウント
+デーモンで割り込み機能が有効になっている必要がある
+self.cb = pigpio.callback(gpio, pigpio.EITHER_EDGE, self._cb)
+
+・DCモータ速度制御サンプルプログラム
+https://www.youtube.com/watch?v=HRaZLCBFVDE
+https://github.com/curiores/ArduinoTutorials
+
+・オドメトリー計算（ROS2 C++）
+https://github.com/hadabot/hadabot_main/blob/master/content/p6/hadabot_ws/src/hadabot_driver/src/hadabot_odom.cpp
+
+・オドメトリを使ってROS2とUnityの間でロボットの位置を同期させる
+https://qiita.com/sfc_nakanishi_lab/items/946dd74481e3c8c2fc92
+
+・オドメトリの誤差モデル
+https://github.com/Sollimann/CleanIt/tree/main/autonomy/src/slam
+
+■Lidar LD06
+LD06 Lidar ROS2 driver
+https://github.com/linorobot/ldlidar
+↑
+ビルドが通らなかった・・・
+結局公式SDKのROS2ソースを採用した↓
+https://www.ldrobot.com/download/44
+
+LDROBOT_LD06_LD19_SDK_20220413\ROS2\ldlidar_stl_ros2-master\ldlidar_stl_ros2-masterを
+「ldlidar_stl_ros2」にリネームして使用
+
+ros2 launch ldlidar_stl_ros2 ld06.launch.py
+→ld06.launch.py内でトピック名が指定されている（デフォルトはLiDAR/LD06）
+
+トピックを可視化するにはrviz2フォルダの設定ファイルを用いて
+rviz2 -d ldlidar.rviz
+
+
+ブラケット
+https://grabcad.com/library/ldrobot-ld06-360-lidar-module-raspberry-pi-mounting-bracket-1
+
+■IMU
+Ubuntu20.04(on ラズパイ4)＆ROS2でLD06とBNO055を使う
+https://zenn.dev/katsuitoh/articles/af8b36a26ab66e
+→Raspberry PiのハードI2Cはクロスストレッチに対応していない。
+　BNO055はクロックストレッチを利用しているので、ハードI2Cは使えない。
+　ソフトI2Cなら対応できるがCPU使用率が上がってしまう。
+　そのためUARTでの接続に変更した。
+　秋月のBNO055はデフォルトがI2Cになっているので、UARTに変更する作業（ジャンパパッドのカット＆半田付け）が必要
+　　https://twitter.com/devemin/status/1508435633609777153
+
+  [22.04]
+  uart5の有効化は以下のファイルを編集すれば良い（20.04のusercfg.txt、syscfg.txtは統合された？）
+  /boot/firmware/config.txt
+　　dtoverlay=uart5
+
+　UART接続なら以下のROSパッケージが使える
+　https://github.com/flynneva/bno055
+　ros2 launch bno055 bno055.launch.py
+
+　rviz2によるIMUデータの可視化
+　https://github.com/CCNYRoboticsLab/imu_tools/tree/foxy
+　　sudo apt-get install ros-foxy-imu-tools
+　　を実行した後にrviz2でimuトピックを可視化できる
+　　（フレームをbno055で指定したものに設定する必要がある）
+
+　BNO055の軸の向き
+　https://twitter.com/devemin/status/1488493631220895747/photo/1
+
+
+・A BNO05 ROS2 Package
+https://github.com/Ar-Ray-code/rclpy-BNO055-publisher
+↑磁器や温度センサには対応してなさそう。I2C接続前提
+
+・BOSCH BNO055をROSで使ってみた。
+https://firtel.blogspot.com/2022/05/akiduki-bno055-9dof-ros.html
+
+・RasberryPiでESP32につないだImuのデータを得る ft. micro-ROS
+https://zenn.dev/kokamoto/articles/a486a2c42133e1
+
+
+・I2Cの場合
+https://github.com/bdholt1/ros2_bno055_sensor
+sudo usermod -aG i2c ubuntu
+groups ubuntu
+
+sudo nano /boot/firmware/usercfg.txt
+→dtoverlay=i2c-gpio,bus=3を記述
+
+https://github.com/fivdi/i2c-bus/blob/master/doc/raspberry-pi-software-i2c.md
+dtoverlay=i2c-gpio,bus=3
+これで /dev/i2c-3 という I2C バスが作成されます。
+SDAはGPIO23に、SCLはGPIO24に、それぞれGPIOヘッダの16ピンと18ピンになります。
+
+■センサフュージョン
+・ROS講座61 位置情報の統合
+https://qiita.com/srs/items/7e8454d4d616983e5cb8
+
+・Sensor Fusion Using the Robot Localization Package - ROS 2
+https://automaticaddison.com/sensor-fusion-using-the-robot-localization-package-ros-2/
+
+
+
+
+
+■SPI通信
+・Raspberry Pi4 SPIでセンサ(L3GD20)から取得した値をROSでPublishする
+https://garberas.com/archives/3239
+
+■pico
+・Windows10でRaspberryPiePicoの開発環境をつくる
+https://tsunelab-programming.com/env-raspipico
+
+・Install 64 bit Visual Studio Code/PlatformIO IDE on Ubuntu for Raspberry Pi
+https://helloraspberrypi.blogspot.com/2020/11/install-visual-studio-codeplatformio.html
+https://www.youtube.com/watch?v=9ztX10fr9bY
+
+・Raspberry Pi Pico python環境作成にはまる ubuntu20.04
+https://blog.goo.ne.jp/field_light/e/46eb8d215b09984bdc7e5832276ea723
+※「Raspberry Pi OS」とは異なり、Raspberry PiにUbuntu 20.04を入れている場合は、
+sudo apt install thonny でインストールすると古いバージョンが入ってしまうのでダメ！！
+sudo pip3 install thonnyでインストールし、バージョンが3.3.14以上ならOK。
+起動はターミナルでthonnyと入力すればOK。
+バージョンが古い(3.2.7など)場合、右下にインタプリタの切り替え表示（Python x.x.x）が出てこないので、picoにプログラムが書けない。。。
+
+・MicroPythonで自作モジュールをインストールする方法
+import sys
+print(sys.path)
+とすると、
+['', '.frozen', '/lib']
+と出てくる。
+
+libフォルダに自作モジュールを配置する必要がある。
+
+メニューのView→Filesでローカルとpicoのディレクトリツリーを表示する。
+※ディレクトリツリーは正常に表示されない場合がある。
+　ローカル側のフォルダは見えるが、中のファイルが参照できないなど。
+　Thonnyを再起動するなどして解決できた。
+
+pico側にlibフォルダがない場合は、pico側で右クリック→New directoryでlibフォルダを作成する。
+libフォルダをクリックしてフォルダ内に入っておく。
+
+ローカル側で自作モジュールを選択して右クリック→「Upload to /lib」を選択すると、
+picoのlibフォルダに自作モジュールが転送され、MicroPythonスクリプトからimportできる。
+
+・picoでモータ制御できるようにする
+https://kirikoshokunin.hatenablog.com/entry/2021/04/18/221012
+
+
+・Arduino IDEインストール
+https://docs.arduino.cc/software/ide-v1/tutorials/Linux
+
+
+・Raspberry Pi PicoでPWM出力
+https://rikei-tawamure.com/entry/2021/02/08/213335
+
+
+
+■micro-ROS
+・micro-ROS module for Raspberry Pi Pico SDK
+https://github.com/micro-ROS/micro_ros_raspberrypi_pico_sdk
+※公式ドキュメント。micro-ROS agentはDockerを用いて起動している
+
+・Raspberry Pi&Ubuntu Server&ROS2(Foxy)でmicro-ROS&Raspberry Pi Pico動作確認
+https://zenn.dev/katsuitoh/articles/0d33c3e95ff466
+※貴重な日本語文献。micro-ROS agentをDockerを使わずに起動する方法で書かれている。
+micro-ROS agentのDocker情報は以下を参照↓
+https://hub.docker.com/r/microros/micro-ros-agent
+
+・Using micro-ROS on the Raspberry Pi Pico
+https://www.hackster.io/kamaluddinkhan/using-micro-ros-on-the-raspberry-pi-pico-772c57
+https://ubuntu.com/blog/getting-started-with-micro-ros-on-raspberry-pi-pico　←上のリンクと同じ内容
+※Visual Studio Codeでビルドする方法が乗っている
+
+・Publishing sonar readings with micro-ROS on the Raspberry Pi Pico
+https://canonical.com/blog/hc-sr04-with-the-raspberry-pi-pico-and-micro-ros
+
+・micro-rosでcmd_velトピックをサブスクライブ
+https://answers.ros.org/question/369403/how-do-i-subscribe-to-a-twist-message-in-micro-ros/
+https://github.com/pablogs9/kobuki_esp32_micro_ros/blob/96a65c9156edbc560c81849c45aecb680518b7e0/main/kobuki_microros.c
+
+・micro-ros kobukiデモ
+https://micro.ros.org/docs/tutorials/demos/kobuki_demo/
+
+・micro-rosのROS_DOMAIN_IDの設定方法
+https://zenn.dev/tasada038/articles/83d78c8a8a3916
+foxy:
+ https://github.com/micro-ROS/micro-ROS-Agent/issues/49#issuecomment-769208313
+humble:
+ https://github.com/micro-ROS/micro-ROS-demos/blob/300067eaa082b7a85e4f2e648f8bee1623b4b08f/rclc/configuration_example/configured_publisher/main.c#L49
+
+
+
+・mROS 2：組込みデバイス向けのROS 2ノード軽量実行環境　←micro-ROSとは別物。Picoでは動作しない？？
+https://speakerdeck.com/takasehideki/mros-2-zu-ip-midebaisuxiang-kefalseros-2falsedoqing-liang-shi-xing-huan-jing
+
+■GPIO（Raspberry Pi + Ubuntu 20.04）
+・pigpio
+http://abyz.me.uk/rpi/pigpio/download.html
+https://qiita.com/shun_xx/items/37582487809274f1b42d
+https://qiita.com/girlfellfromsky/items/b577b03fe52d273b328f
+
+pigpiodデーモンの再起動について、
+　sudo systemctl daemon-reload
+だけで上手くいかない場合は
+　sudo killall pigpiod
+をしてから、
+　sudo systemctl restart pigpiod
+で起動できた。
+起動しているかは、
+　sudo systemctl status pigpiod
+で確認。
+
+デーモンの設定ファイル内のオプションで、割り込み機能の無効化やサンプリング周期を設定できる
+
+・pigpioのサンプルコード集
+https://github.com/joan2937/pigpio/blob/master/EXAMPLES/Python/ROTARY_ENCODER/rotary_encoder.py
+https://github.com/vash3d/pigpio_encoder/blob/master/src/pigpio_encoder/rotary.py
+https://github.com/vash3d/pigpio_encoder/blob/master/src/pigpio_encoder/rotary_mp.py　←micropython版
+https://github.com/rakesh-i/MicroPython-Encoder-motor/blob/main/encoder_N20_esp.py
+
+sudo gpasswd -a ubuntu input; sudo gpasswd -a ubuntu i2c; sudo gpasswd -a ubuntu spi; sudo gpasswd -a ubuntu gpio; sudo gpasswd -a ubuntu video;
+
+
+sudo pip3 install rpi.gpio
+sudo usermod -a -G gpio $USER
+sudo pip3 install spidev
+
+sudo apt install python3-rpi.gpio
+
+・Raspberry Pi & Ubuntu 18.04 でGPIOを使う
+https://qiita.com/myasu/items/e3f81b2826ed5797a040
+
+・Raspberry Pi 4に入れたUbuntu 21.10でLGPIOを使ってGPIO制御
+https://kurukuruway.com/kaihatsu/raspberry-pi-4%E3%81%AB%E5%85%A5%E3%82%8C%E3%81%9Fubuntu-21-10%E3%81%A7lgpio%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6gpio%E5%88%B6%E5%BE%A1/
+
+
+・半固定抵抗のつまみでDCモーターを制御
+https://www.souichi.club/raspberrypi/dc-motor/
+
+・spi.openでパーミッションエラーになるのを解決→python3 motor.pyで実行できるようにする
+→以下のページの通りしたらOK。再起動が必要だった。ls -l /dev/spidev*でグループがspiになっていることを確認。
+https://qiita.com/NeK/items/ea3a8158646ded95ad7e
+
+
+
+
+
+・速度入力をコマンドで与えられるようにする
+→OK
+
+・ハードウェアPWMで動かすようにする
+→OK
+ハードウェアPWM用のGPIOピンに接続
+pi.hardware_PWM()で、dutyは1000000(=1M)をduty比1として整数を指定することに注意
+
+
+・ros2化：cmd_velをサブスクライブして動くようにする(cmd_velはコマンドラインでpublishする)
+
+step.1
+速度指令を出す　publish cmd_vel→teleop_node使えばOK
+　↓
+PWM制御する subscribe cmd_vel
+
+step.2
+速度指令を出す　publish cmd_vel
+　↓
+エンコーダの値を読む
+各モータの回転数を揃えるように計算する
+PWM制御する subscribe cmd_vel
+
+
+picoでPWM制御するためのモータドライバをC言語で作成（micropythonは公式版がある）
+
+
+
+やりたいこと
+・iPhone or ゲームパッドからjoystick→twistメッセージをpublish（C#で書く）
+
+・twistメッセージをsubscribeして、モータをPWM制御（micropython/Cで書く）
+
+
+
+
+・depthaiカメラでyolov4_tinyを実行し、検出結果を描画
+　検出結果の画像をpublishできるようにして、それをunity側でsubscribeすればOK
+
+main.py
+  cmd_vel_publisher(teleop_twist_xx)
+  motor_cntroler
+    pwm
+    cmd_vel_subscriber
+    rotary_encoder
+
+
+
+
+
+
+
+
+
+・【ROS】ラズパイで始めるROS BOT入門④ ～WaveShare社Alphabotの移動制御対応～
+https://ogimotokin.hatenablog.com/entry/2018/05/12/234926
+
+・Open Dynamics Engine によるロボットの自己位置の推定 (Python)
+https://www.qoosky.io/techs/d4a89c01fb
+
+
+
+■Unity
+・UnityでNavigation2のゴールを送信するGUIを作る
+https://qiita.com/sfc_nakanishi_lab/items/ac32836d729a473416c0
+
+・ROS2 Navigation2 Action Clientを使用してゴールを送信する
+https://qiita.com/porizou1/items/cb9382bb2955c144d168
+
+・ジョイスティックでキャラクターを操作
+https://raspberly.hateblo.jp/entry/JoystickPack
+
+・UnityでROS2の画像をサブスクライブする
+https://qiita.com/sfc_nakanishi_lab/items/78294038542a386739fd
+
+・BGR→RGBへの変換（RGBで読み込み、シェーダでRGBをBGRとして扱う）
+https://github.com/CMU-Perceptual-Computing-Lab/openpose_unity_plugin/blob/master/OpenPosePlugin/Assets/OpenPose/Examples/Render/RGB_2_BGR_UI_Shader.shader
+https://github.com/CMU-Perceptual-Computing-Lab/openpose_unity_plugin/blob/master/OpenPosePlugin/Assets/OpenPose/Examples/Scripts/ImageRenderer.cs
+
+
+
+https://github.com/unity3d-jp/Unity-ROS-MobileRobot-UI-Tutorial
+https://github.com/Unity-Technologies/Robotics-Nav2-SLAM-Example
+
+
+・デフォルトビジュアライザ
+https://github.com/Unity-Technologies/ROS-TCP-Connector/tree/main/com.unity.robotics.visualizations/Runtime/DefaultVisualizers
+
+
+■Arduino IDE
+・Arduino IDEのシリアルプロッタの使い方【グラフを表示】
+https://miraiworks.org/?p=5670
+
+・UbuntuのArduinoIDEでアップロードやシリアル通信で出るpermissionエラーの対応方法
+https://asukiaaa.blogspot.com/2016/07/ubuntuarduinopermission.html
+sudo usermod -a -G dialout ubuntu
+※再起動が必要
+
+■ROS2とUnreal Engineの連携
+・【UnrealEngine4, rclUE, 第１回】自作プロジェクトにrclUEプラグインを導入する
+https://researchmap.jp/blogs/blog_entries/view/96639/5b2a7e306cc8f7df841adfc9094932ff?frame_id=461924
+
+
+Twist →　RPM →　duty
+
+wr = v/Rr + w*W/2Rr
+wl = v/Rl - w*W/2Rl
+
+
+Rr = Rl = wheeles_size / 2
+W = axle_length
+v = v
+w = omega
+
+wr
+= v/Rr + w*W/2Rr
+= v/(wheeles_size / 2) + omega*axle_length/wheeles_size
+= (omega*axle_length + 2*v) / wheeles_size
+
+freq = w/2pi
+
+freq * 60  *
+ /s  s/min ギア比
+
+
+def twist2rpm(self, received_data):#convert to speed
+        #(m/s, rad/s)
+        wheeles_size = 0.075#wheel size
+        axle_length = 0.35#axle_size(2d)
+
+        v = received_data.linear.x#(m/s)
+        omega = received_data.angular.z#(rad/s)
+
+        v_r = (omega*axle_length + 2*v)/2
+        v_l = (omega*axle_length - 2*v)/(-2)
+
+        v_r = v_r/(wheeles_size * 2 * 3.14) #wheel_speed(1/s)
+        v_l = v_l/(wheeles_size * 2 * 3.14) #wheel_speed(1/s)
+        r_rpm = 60 * v_r * 19 #gear rate
+        l_rpm = 60 * v_l * 19 #gear rate
+
+        return r_rpm, l_rpm
+
+
+今日やること
+・サブスクライブしたcmd_velをpwmに変換してモータを動かす
+・エンコーダプログラムをmicro-rosと統合する
+・エンコーダ値を使って速度制御する　pid_control.c　に着手する
+
+---
+・オドメトリーを計算する
+入力：enc_r_values/enc_l_values
+出力：odom
+
+
+
+
+・オドメトリーをpublishする
+
+・IMUを動かしてみる（ラズパイ側）
+・IMUのyawデータをサブスクライブして、オドメトリーを計算する方法を検討する
+
+・micro-rosでIMUのyawデータをサブスクライブする
+
+imu 100Hz
+
+
+
+GP26の取り扱い大丈夫か確認（エンコーダ単体でやった方が良い）
+cp pio_quadrature_encoder.uf2 /media/$USER/RPI-RP2
+
+[コマンド集]
+cd ros2_ws
+change_ws
+ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=192.168.11.90
+cp pico_micro_ros_example.uf2 /media/$USER/RPI-RP2
+docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:foxy serial --dev /dev/ttyACM0 -b 115200
+sudo picocom -b 115200 /dev/ttyACM0
+
+colcon build --packages-select xxx
+
+[Odom]
+colcon build --packages-select odometry_publisher
+ros2 run odometry_publisher odometry_publisher
+
+ros2 launch robot_localization my_ekf.launch.py
+
+/opt/ros/foxy/share/robot_localization/launch/my_ekf.launch.py
+/opt/ros/foxy/share/robot_localization/params/my_ekf.yaml
+
+
+
+rclcpp::QoS(10).best_effort()　←micro-ros側のエンコーダpublisherと同じQoSに設定する必要がある
+/wheel/odometry
+
+2*pi*0.035 = 0.2199115 m = 1440 count
+
+ticks_meter =  1440 / (2*pi*0.035) = 6548.089 count/m
+base_width = 0.141
+
+
+[IMU]
+ros2 launch bno055 bno055.launch.py
+
+~/ros2_ws/src/bno055/bno055/params/bno055_params.yaml
+frame_id: "imu_link"　→ "base_link"
+
+パラメータ変更後は再ビルドしないと反映されない？↓
+　colcon build --packages-select bno055
+
+https://answers.ros.org/question/9957/what-frame_id-to-put-in-a-sensor_msgsimu-message/
+
+[カメラ]
+#ros2 launch depthai_examples mobile_publisher.launch.py camera_model:=OAK-D-LITE
+#ros2 run detection_visualizer detection_visualizer
+
+colcon build --packages-select oak_d_lite
+ros2 run oak_d_lite detection
+ros2 run image_transport republish raw compressed --ros-args --remap in:=/image_raw --remap out/compressed:=/image_raw/compressed
+
+
+[Lidar]
+ros2 launch ldlidar_stl_ros2 ld06.launch.py
+※ld06.launch.py内でトピック名が指定されている（デフォルトはLiDAR/LD06）
+
+rviz2 -d ldlidar.rviz
+
+
+
+robot_localizationのekfでodometry/filteredが出力されない・・・
+
+
+
+
+
+
+PID制御
+・delta_tを正しく求める
+→timer_callback内で
+float delta_t = (float) last_call_time / 1.0e9;
+とすれば求まりそう。
+今はだいたい時間間隔が0.1秒になっている。
+PID制御はtimer_callback内でやるのが良い。
+
+subscription_callbackはtwist_msgを受信して、車体速度・角速度を受け取るだけにする
+
+・PIDを関数化する
+・係数Kp,Ki,Kdを設定する
+・odometryを算出してpublishする
+
+
+2piR : x = 1440 : d_ticks
+
+x = 2piR * d_ticks / 1440
+
+
+
+PWM制御は見直す
+
+PID制御しない場合の左右のエンコーダ値を計測。左右の平均を目標値にする
+　指令速度x　→　目標回転値y　の関係を作る
+
+v, w →　enc_r, enc_l？
+
+
+
+w*60*120/(2*pi)
+
+    (v,w)
+     1,0 
+0,1     0,-1 ←角速度は反時計回りが正
+    -1,0
+
+    (vl,vr)
+    0.5,0.5
+-0.5,0.5  0.5,-0.5
+   -0.5,-0.5
+
+v:-1.0~1.0
+w:-1.0~1.0
+
+vr=(v+w)/2
+vl=(v-w)/2
+
+0.5 -> 30
+
+limit(vr, -vr_max, vr_max);
+limit(vl, -vl_max, vl_max);
+
+duty_r = vr / vr_max * duty_max;
+duty_l = vl / vl_max * duty_max;
+
+
+duty:-30~30
+各dutyに対してエンコーダがΔtの間に左右モータがそれぞれどれくらい回転するか？を計測して目標値を設定
+
+
+vr →　duty_r → target_d_enc_r
+
+
+
+target_v, target_w
+
+
+25 oz・in @ 1.25A
+= 0.176553672316384 N・m / 1.25 A
+= 0.1412429 N・m/A
+= 0.1412429 V / (rad/s)
+
+e = 0.1412429 * w
+
+
+
+duty = e / Vbatt
+
+
+
+
+
+= 0.1412429 * 2pi/60 V/rpm = 0.01479093 V/rpm
+
+
+
+duty_r = prev_duty_r + pid_r;
+
+
+
+
+
+prev_duty_r = duty_r;
+
+
+yoloの検出結果をサブスクライブして、cmd_velをパブリッシュ
+
+ジョイスティック入力と分けるのはどうする？　違うトピック名にしないとぶつかってまずいかも？
+　joy_cmd_vel
+  det_cmd_vel
+
+  if fabs(joy_cmd_vel.linear.x) < 1e-5 and fabs(joy_cmd_vel.angular.z) < 1e-5
+    cmd_vel = det_cmd_vel
+  else
+    cmd_vel = joy_cmd_vel
+
+
+
+
+いまのプログラムだと物体検出でロストした場合にロボットが動き続けないか？
+from vision_msgs.msg import Detection2DArray
+from geometry_msgs.msg import Twis
+
+
+
+base_footprin->base_link:15.5mm+厚さ10mm = 25.5mm = 0.0255m
+base_link->laser_link:165mm=0.165m
+base_link->imu_link：高さ130mm=0.13m、後ろ-50mm=-0.05m
+base_link->camera_link：高さ100mm=0.1m、前60mm=0.06m
+
+
+
+
+
