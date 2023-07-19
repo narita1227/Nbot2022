@@ -47,14 +47,19 @@ def generate_launch_description():
         get_package_share_directory('nav2_bringup'),
         'launch'
     )
+    
+    cartographer_launc_file_dir = os.path.join(
+        get_package_share_directory('cartographer_slam'),
+        'launch'
+    )
 
     # Launch files and Nodes #
     # start navigation
     nav2_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
-            nav2_launch_file_dir, '/bringup_launch.py']),
+            nav2_launch_file_dir, '/navigation_launch.py']), # bringup without amcl, map_server
         launch_arguments = {
-            'map': map_yaml_file,
+            #'map': map_yaml_file,
             'params_file': params_file,
             'use_sim_time': use_sim_time}.items(),
     )
@@ -66,20 +71,27 @@ def generate_launch_description():
         arguments = ['-d', rviz2_file],
         parameters = [{'use_sim_time': use_sim_time}]
     )
-
+    
+    # start SLAM
+    cartographer_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            cartographer_launc_file_dir, '/cartographer_publish_odom.launch.py']),
+    )
+    
     # start inspection
     inspection_cmd = Node(
         package = 'my_robot_navigation',
         executable = 'inspection',
         #emulate_tty = True,
         output = 'screen')
-
+    
     ld = LaunchDescription()
     ld.add_action(declare_arg_map)
     ld.add_action(declare_arg_params_file)
     ld.add_action(declare_arg_rviz2_config_path)
 
     ld.add_action(nav2_cmd)
+    ld.add_action(cartographer_cmd)
     ld.add_action(rviz2_cmd)
     #ld.add_action(inspection_cmd)
 

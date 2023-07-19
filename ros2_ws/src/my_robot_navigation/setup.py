@@ -20,13 +20,14 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ubuntu',
-    maintainer_email='ubuntu@todo.todo',
+    maintainer='yu',
+    maintainer_email='yu@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'inspection = my_robot_navigation.inspection:main',
         ],
     },
 )

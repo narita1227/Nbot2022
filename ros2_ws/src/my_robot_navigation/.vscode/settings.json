@@ -1,0 +1,10 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/yu/ros2_ws/install/two_wheeled_robot/local/lib/python3.10/dist-packages",
+        "/home/yu/ros2_ws/install/my_robot_navigation/lib/python3.10/site-packages",
+        "/home/yu/ros2_ws/install/cartographer_slam/lib/python3.10/site-packages",
+        "/home/yu/ros2_ws/install/cartographer_localization/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}
